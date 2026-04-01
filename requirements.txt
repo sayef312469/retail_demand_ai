@@ -1,0 +1,21 @@
+# Core data
+pandas
+numpy
+python-dateutil
+
+# Forecasting
+prophet
+statsmodels
+
+# ML / evaluation
+scikit-learn
+
+# API
+fastapi
+uvicorn
+
+# Visualisation
+matplotlib
+
+# Plotting (optional, for richer frontend charts)
+plotly
