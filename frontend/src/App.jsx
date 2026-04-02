@@ -90,33 +90,53 @@ export default function App() {
 
   return (
     <div style={s.root}>
+      {/* ── HEADER ───────────────────────────────────────────────────── */}
       <header style={s.header}>
         <div style={s.headerInner}>
           <div>
             <h1 style={s.h1}>Retail Demand AI</h1>
             <p style={s.h1Sub}>Product Viability &amp; Stock Recommendation — Group B-5</p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={s.dot(summary ? "#15803d" : "#b91c1c")} />
-            <span style={{ fontSize: 12, color: "#78716c" }}>{summary ? "API connected" : "API offline"}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={s.statusDot(summary ? "#15803d" : "#b91c1c")} />
+            <span style={{ fontSize: 12, color: "#78716c", fontWeight: 500 }}>{summary ? "Connected" : "Offline"}</span>
           </div>
         </div>
       </header>
 
-      <div style={s.layout}>
-        {/* ── Sidebar ──────────────────────────────────────────────── */}
-        <aside style={s.sidebar}>
-          <div style={s.sideSection}>
-            <label style={s.label}>Store</label>
-            <select style={s.select} value={store} onChange={e => setStore(e.target.value)}>
+      {/* ── TAB NAVIGATION (Horizontal Top) ──────────────────────────── */}
+      <nav style={s.tabNav}>
+        <div style={s.tabNavInner}>
+          {TABS.map((t, i) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                ...s.tabButton(tab === t),
+                borderBottom: tab === t ? "3px solid #3b82f6" : "3px solid transparent"
+              }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {/* ── MAIN LAYOUT ──────────────────────────────────────────────── */}
+      <div style={s.layoutWrapper}>
+        {/* ── Controls Panel ───────────────────────────────────────────── */}
+        <aside style={s.controlsPanel}>
+          <div style={s.controlSection}>
+            <label style={s.controlLabel}>Store</label>
+            <select style={s.controlSelect} value={store} onChange={e => setStore(e.target.value)}>
               <option value="">All stores</option>
               {stores.map(st => <option key={st} value={st}>{st}</option>)}
             </select>
           </div>
 
-          <div style={s.sideSection}>
-            <label style={s.label}>Item</label>
-            <select style={s.select} value={item} onChange={e => setItem(e.target.value)} disabled={!items.length}>
+          <div style={s.controlSection}>
+            <label style={s.controlLabel}>Item</label>
+            <select style={s.controlSelect} value={item} onChange={e => setItem(e.target.value)} disabled={!items.length}>
               <option value="">Select item…</option>
               {items.map(it => (
                 <option key={it.item_id} value={it.item_id}>
@@ -126,24 +146,20 @@ export default function App() {
             </select>
           </div>
 
-          <div style={s.sideSection}>
-            <label style={s.label}>Forecast model</label>
-            <div style={{ display: "flex", gap: 6 }}>
+          <div style={s.controlSection}>
+            <label style={s.controlLabel}>Forecast Model</label>
+            <div style={{ display: "flex", gap: 8 }}>
               {["both", "prophet", "arima"].map(m => (
-                <button key={m} onClick={() => setModelFilter(m)} style={s.pill(modelFilter === m)}>{m}</button>
+                <button key={m} onClick={() => setModelFilter(m)} style={s.modelPill(modelFilter === m)}>
+                  {m === "both" ? "Ensemble" : m.charAt(0).toUpperCase() + m.slice(1)}
+                </button>
               ))}
             </div>
           </div>
-
-          <nav style={{ marginTop: "auto" }}>
-            {TABS.map(t => (
-              <button key={t} onClick={() => setTab(t)} style={s.navBtn(tab === t)}>{t}</button>
-            ))}
-          </nav>
         </aside>
 
-        {/* ── Main ─────────────────────────────────────────────────── */}
-        <main style={s.main}>
+        {/* ── Main Content ─────────────────────────────────────────────── */}
+        <main style={s.mainContent}>
 
           {/* DASHBOARD */}
           {tab === "Dashboard" && (
@@ -500,24 +516,53 @@ function ItemEvalPanel({ store, item }) {
 }
 
 const styles = {
-  root:      { minHeight: "100vh", display: "flex", flexDirection: "column" },
-  header:    { background: "#fff", borderBottom: "1px solid #e7e5e4", padding: "0 24px" },
-  headerInner: { maxWidth: 1280, margin: "0 auto", padding: "16px 0", display: "flex", justifyContent: "space-between", alignItems: "center" },
-  h1:        { fontSize: 20, fontWeight: 700, color: "#1c1917" },
-  h1Sub:     { fontSize: 12, color: "#78716c", marginTop: 2 },
-  layout:    { display: "flex", flex: 1, maxWidth: 1280, margin: "0 auto", width: "100%", padding: "24px", gap: 24 },
-  sidebar:   { width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 20 },
-  sideSection: { display: "flex", flexDirection: "column", gap: 6 },
-  label:     { fontSize: 11, fontWeight: 600, color: "#78716c", textTransform: "uppercase", letterSpacing: "0.05em" },
-  select:    { padding: "8px 10px", borderRadius: 8, border: "1px solid #e7e5e4", fontSize: 13, background: "#fff", cursor: "pointer", width: "100%" },
-  main:      { flex: 1, minWidth: 0 },
-  card:      { background: "#fff", border: "1px solid #e7e5e4", borderRadius: 12, padding: "20px 24px" },
-  cardGrid:  { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 },
-  h2:        { fontSize: 20, fontWeight: 700, color: "#1c1917", marginBottom: 20 },
-  h3:        { fontSize: 15, fontWeight: 600, color: "#1c1917" },
-  emptyState: { background: "#fff", border: "1px solid #e7e5e4", borderRadius: 12, padding: 40, textAlign: "center", color: "#78716c", fontSize: 14 },
-  code:      { background: "#1c1917", color: "#d4d0ca", borderRadius: 8, padding: "10px 14px", fontSize: 12, fontFamily: "monospace", marginTop: 12, textAlign: "left", display: "inline-block" },
-  navBtn:    (active) => ({ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", background: active ? "#f5f5f4" : "transparent", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: active ? 600 : 400, color: active ? "#1c1917" : "#57534e", marginBottom: 2 }),
-  pill:      (active) => ({ padding: "5px 12px", borderRadius: 20, border: `1px solid ${active ? "#1c1917" : "#e7e5e4"}`, background: active ? "#1c1917" : "#fff", color: active ? "#fff" : "#57534e", fontSize: 12, cursor: "pointer", fontWeight: active ? 600 : 400 }),
-  dot:       (color) => ({ width: 8, height: 8, borderRadius: "50%", background: color }),
+  // ── Root & Layout ─────────────────────────────────────────────────────
+  root:        { minHeight: "100vh", display: "flex", flexDirection: "column", background: "#f9f8f7", fontFamily: "system-ui, sans-serif" },
+  header:      { background: "linear-gradient(135deg, #1c1917 0%, #292522 100%)", borderBottom: "1px solid #1c1917", padding: "0 24px", boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)" },
+  headerInner: { maxWidth: 1400, margin: "0 auto", padding: "18px 0", display: "flex", justifyContent: "space-between", alignItems: "center" },
+  h1:         { fontSize: 24, fontWeight: 700, color: "#fff", letterSpacing: "-0.5px" },
+  h1Sub:      { fontSize: 12, color: "#bfbbb3", marginTop: 4, fontWeight: 400 },
+  statusDot:  (color) => ({ width: 8, height: 8, borderRadius: "50%", background: color, boxShadow: `0 0 12px ${color}` }),
+
+  // ── Tab Navigation ───────────────────────────────────────────────────
+  tabNav:     { background: "#fff", borderBottom: "1px solid #e7e5e4", boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)" },
+  tabNavInner: { maxWidth: 1400, margin: "0 auto", padding: "0 24px", display: "flex", gap: 32 },
+  tabButton:  (active) => ({
+    padding: "12px 8px",
+    fontSize: 13,
+    fontWeight: active ? 600 : 500,
+    color: active ? "#3b82f6" : "#78716c",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    position: "relative",
+  }),
+
+  // ── Layout Wrapper ───────────────────────────────────────────────────
+  layoutWrapper: { display: "flex", flex: 1, maxWidth: 1400, margin: "0 auto", width: "100%", padding: "24px", gap: 24 },
+
+  // ── Controls Panel (Left Side) ────────────────────────────────────────
+  controlsPanel: { width: 200, flexShrink: 0, display: "flex", flexDirection: "column", gap: 18 },
+  controlSection: { display: "flex", flexDirection: "column", gap: 8 },
+  controlLabel: { fontSize: 11, fontWeight: 700, color: "#78716c", textTransform: "uppercase", letterSpacing: "0.08em" },
+  controlSelect: { padding: "9px 11px", borderRadius: 8, border: "1px solid #e7e5e4", fontSize: 13, background: "#fff", cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s", boxShadow: "0 1px 2px rgba(0, 0, 0, 0.02)" },
+  modelPill: (active) => ({ padding: "6px 11px", borderRadius: 6, border: `1px solid ${active ? "#3b82f6" : "#e7e5e4"}`, background: active ? "#eff6ff" : "#fff", color: active ? "#1e40af" : "#78716c", fontSize: 12, cursor: "pointer", fontWeight: active ? 600 : 500, transition: "all 0.2s" }),
+
+  // ── Main Content ──────────────────────────────────────────────────────
+  mainContent: { flex: 1, minWidth: 0, borderRadius: 12, background: "#fff", border: "1px solid #e7e5e4", padding: "28px 32px", boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)" },
+
+  // ── Cards & Typography ────────────────────────────────────────────────
+  card:       { background: "#fff", border: "1px solid #e7e5e4", borderRadius: 10, padding: "20px 24px", marginTop: 16, boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)" },
+  cardGrid:   { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14 },
+  h2:         { fontSize: 22, fontWeight: 700, color: "#1c1917", marginBottom: 22, letterSpacing: "-0.3px" },
+  h3:         { fontSize: 15, fontWeight: 700, color: "#1c1917", letterSpacing: "-0.2px" },
+
+  // ── Empty States ───────────────────────────────────────────────────────
+  emptyState: { background: "#f9f8f7", border: "2px dashed #e7e5e4", borderRadius: 10, padding: 48, textAlign: "center", color: "#78716c", fontSize: 14 },
+  code:       { background: "#1c1917", color: "#fef3c7", borderRadius: 6, padding: "10px 12px", fontSize: 12, fontFamily: "monospace", marginTop: 14, textAlign: "left", display: "inline-block", letterSpacing: "0.5px" },
+
+  // ── Pills & Buttons ────────────────────────────────────────────────────
+  pill:       (active) => ({ padding: "6px 12px", borderRadius: 6, border: `1px solid ${active ? "#1c1917" : "#e7e5e4"}`, background: active ? "#1c1917" : "#fff", color: active ? "#fff" : "#57534e", fontSize: 12, cursor: "pointer", fontWeight: active ? 600 : 500, transition: "all 0.15s" }),
+  dot:        (color) => ({ width: 8, height: 8, borderRadius: "50%", background: color, boxShadow: `0 0 12px ${color}` }),
 };
