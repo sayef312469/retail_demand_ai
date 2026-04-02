@@ -2,11 +2,11 @@
 train_prophet.py — Prophet forecasting model for M5 retail data.
 
 Fits a Facebook Prophet model per (store_id, item_id) series and generates
-3-month ahead forecasts with 95% confidence intervals.
+12-month ahead forecasts with 95% confidence intervals.
 
 Requires: data/processed/processed_m5.csv (run preprocess.py first)
 Output  : data/forecast/prophet/forecast_{store_id}_{safe_item_id}.csv
-          Columns: ds, yhat, yhat_lower, yhat_upper
+          Columns: ds, yhat, yhat_lower, yhat_upper, month_index
 """
 
 import os
@@ -18,7 +18,7 @@ warnings.filterwarnings("ignore")
 
 PROCESSED_PATH   = "data/processed/processed_m5.csv"
 FORECAST_DIR     = "data/forecast/prophet"
-FORECAST_PERIODS = 3    # months ahead
+FORECAST_PERIODS = 12   # months ahead
 MIN_SERIES_LEN   = 20   # Prophet needs at least this many data points
 
 
@@ -86,6 +86,7 @@ def train_prophet_models():
         horizon["yhat"]        = horizon["yhat"].clip(lower=0)
         horizon["yhat_lower"]  = horizon["yhat_lower"].clip(lower=0)
         horizon["yhat_upper"]  = horizon["yhat_upper"].clip(lower=0)
+        horizon["month_index"] = list(range(1, FORECAST_PERIODS + 1))
 
         out_path = os.path.join(FORECAST_DIR, f"forecast_{store}_{safe_item_id(item)}.csv")
         horizon.to_csv(out_path, index=False)

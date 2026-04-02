@@ -5,11 +5,11 @@ For each (store_id, item_id) time series:
   1. Tests stationarity with the Augmented Dickey-Fuller test.
   2. Auto-selects the best ARIMA(p, d, q) order by minimising AIC
      over a small grid (avoids heavy pmdarima dependency).
-  3. Generates a 3-month ahead forecast with 95% confidence intervals.
+  3. Generates a 12-month ahead forecast with 95% confidence intervals.
 
 Requires: data/processed/processed_m5.csv (run preprocess.py first)
 Output  : data/forecast/arima/forecast_{store_id}_{safe_item_id}.csv
-          Columns: ds, yhat, yhat_lower, yhat_upper, model_order
+          Columns: ds, yhat, yhat_lower, yhat_upper, model_order, month_index
 """
 
 import os
@@ -24,7 +24,7 @@ warnings.filterwarnings("ignore")
 
 PROCESSED_PATH   = "data/processed/processed_m5.csv"
 FORECAST_DIR     = "data/forecast/arima"
-FORECAST_PERIODS = 3    # months ahead
+FORECAST_PERIODS = 12   # months ahead
 MIN_SERIES_LEN   = 24   # need at least 24 months for reliable ARIMA
 
 # Compact AIC grid — balances speed and model quality
@@ -123,11 +123,12 @@ def forecast_one_series(series: pd.Series, periods: int = FORECAST_PERIODS):
     )
 
     result = pd.DataFrame({
-        "ds":          future_dates,
-        "yhat":        summary["mean"].values,
-        "yhat_lower":  summary["mean_ci_lower"].values,
-        "yhat_upper":  summary["mean_ci_upper"].values,
-        "model_order": [str(order)] * periods,
+        "ds":           future_dates,
+        "yhat":         summary["mean"].values,
+        "yhat_lower":   summary["mean_ci_lower"].values,
+        "yhat_upper":   summary["mean_ci_upper"].values,
+        "model_order":  [str(order)] * periods,
+        "month_index":  list(range(1, periods + 1)),
     })
 
     # Sales cannot be negative

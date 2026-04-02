@@ -27,13 +27,21 @@ export default function App() {
   const [loading,     setLoading]     = useState({});
   const [modelFilter, setModelFilter] = useState("both");
   const [decFilter,   setDecFilter]   = useState("");
+  const [recSearchQuery, setRecSearchQuery] = useState("");
+  const [recPage,     setRecPage]     = useState(0);
+  const [recTotal,    setRecTotal]    = useState(0);
+  const REC_PAGE_SIZE = 50;
 
   const setLoad = (key, val) => setLoading(p => ({ ...p, [key]: val }));
 
   useEffect(() => {
     api.summary().then(setSummary).catch(() => {});
     api.stores().then(d => setStores(d.stores || [])).catch(() => {});
-    api.recommendations({ limit: 200 }).then(d => setRecList(d.items || [])).catch(() => {});
+    // Fetch with high limit to get total count dynamically
+    api.recommendations({ limit: 10000 }).then(d => {
+      setRecTotal(d.total || 0);
+      setRecList(d.items || []);
+    }).catch(() => {});
     api.evalSummary().then(d => setEvalData(d.summary || [])).catch(() => {});
   }, []);
 
@@ -47,7 +55,7 @@ export default function App() {
     if (!store || !item) return;
     setForecast(null); setPvi(null); setRec(null);
     setLoad("forecast", true);
-    api.forecast(store, item, modelFilter)
+    api.forecast(store, item, modelFilter, 12)  // Always fetch full 12 months for client-side slicing in chart
       .then(setForecast).catch(() => {}).finally(() => setLoad("forecast", false));
     api.pvi(store, item).then(setPvi).catch(() => {});
     api.recommendation(store, item).then(setRec).catch(() => {});
@@ -56,10 +64,28 @@ export default function App() {
   useEffect(() => { loadItemData(); }, [loadItemData]);
 
   useEffect(() => {
-    api.recommendations({ store_id: store || undefined, decision: decFilter || undefined, limit: 200 })
-      .then(d => setRecList(d.items || [])).catch(() => {});
+    setRecPage(0);  // Reset to first page when filters change
+    api.recommendations({ store_id: store || undefined, decision: decFilter || undefined, limit: 10000 })
+      .then(d => {
+        setRecTotal(d.total || 0);
+        setRecList(d.items || []);
+      }).catch(() => {});
   }, [store, decFilter]);
 
+  // Filter recommendations based on search query
+  const filteredRecs = recList.filter(item => {
+    if (!recSearchQuery.trim()) return true;
+    const query = recSearchQuery.toLowerCase();
+    return (
+      (item.item_id && item.item_id.toLowerCase().includes(query)) ||
+      (item.store_id && item.store_id.toLowerCase().includes(query)) ||
+      (item.cat_id && item.cat_id.toLowerCase().includes(query))
+    );
+  });
+
+  const paginatedRecs = filteredRecs.slice(recPage * REC_PAGE_SIZE, (recPage + 1) * REC_PAGE_SIZE);
+  const totalPages = Math.ceil(filteredRecs.length / REC_PAGE_SIZE);
+  
   const s = styles;
 
   return (
@@ -158,11 +184,71 @@ export default function App() {
                       </div>
                     </div>
                   )}
+
+                  {summary.distribution && (
+                    <div style={{ ...s.card, marginTop: 20 }}>
+                      <h3 style={s.h3}>Data distribution & coverage</h3>
+                      <p style={{ fontSize: 12, color: "#78716c", margin: "4px 0 14px" }}>
+                        Training dataset includes {summary.total_items} items across {summary.total_stores} stores and {summary.total_categories} categories. Breakdown by store and category:
+                      </p>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                        {/* Items per Store */}
+                        <div>
+                          <h4 style={{ fontSize: 13, fontWeight: 600, color: "#44403c", marginBottom: 12 }}>Items per store</h4>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {Object.entries(summary.distribution.items_per_store || {})
+                              .sort(([, a], [, b]) => b - a)
+                              .map(([store, count]) => (
+                                <div key={store} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                  <span style={{ fontSize: 12, color: "#57534e", minWidth: 60 }}>{store}</span>
+                                  <div style={{ flex: 1, height: 20, backgroundColor: "#e7e5e4", borderRadius: 4, marginLeft: 8, position: "relative" }}>
+                                    <div style={{ 
+                                      height: "100%", 
+                                      width: `${(count / Math.max(...Object.values(summary.distribution.items_per_store || {}))) * 100}%`,
+                                      backgroundColor: "#3b82f6", 
+                                      borderRadius: 4,
+                                      transition: "width 0.3s"
+                                    }} />
+                                  </div>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: "#1c1917", minWidth: 40, textAlign: "right", marginLeft: 8 }}>{count}</span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+
+                        {/* Items per Category */}
+                        <div>
+                          <h4 style={{ fontSize: 13, fontWeight: 600, color: "#44403c", marginBottom: 12 }}>Items per category</h4>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {Object.entries(summary.distribution.items_per_category || {})
+                              .sort(([, a], [, b]) => b - a)
+                              .map(([cat, count]) => (
+                                <div key={cat} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                  <span style={{ fontSize: 12, color: "#57534e", minWidth: 100 }}>{cat}</span>
+                                  <div style={{ flex: 1, height: 20, backgroundColor: "#e7e5e4", borderRadius: 4, marginLeft: 8, position: "relative" }}>
+                                    <div style={{ 
+                                      height: "100%", 
+                                      width: `${(count / Math.max(...Object.values(summary.distribution.items_per_category || {}))) * 100}%`,
+                                      backgroundColor: "#10b981", 
+                                      borderRadius: 4,
+                                      transition: "width 0.3s"
+                                    }} />
+                                  </div>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: "#1c1917", minWidth: 40, textAlign: "right", marginLeft: 8 }}>{count}</span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div style={s.emptyState}>
                   <p>Run the full pipeline first:</p>
                   <pre style={s.code}>{"python src/forecast.py\npython src/pvi.py\npython src/recommend.py\npython src/evaluate.py\npython src/plot_reports.py"}</pre>
+                  <p style={{ fontSize: 12, color: "#78716c", marginTop: 16 }}>Tip: Default trains on top 500 items by sales volume. To scale up:</p>
+                  <pre style={s.code}>{"# Train on 1000 items (more comprehensive)\npython src/forecast.py --top-items 1000\n\n# Then run PVI, recommendations, etc."}</pre>
                 </div>
               )}
             </div>
@@ -181,13 +267,14 @@ export default function App() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                     <div>
                       <h3 style={s.h3}>{item}</h3>
-                      <p style={{ fontSize: 12, color: "#78716c" }}>{store} · 3-month ahead forecast with 95% confidence bands</p>
+                      <p style={{ fontSize: 12, color: "#78716c" }}>{store} · 3–12 month forecast. Ensemble (60% ARIMA + 40% Prophet) shown in green. Select horizon using pills above chart.</p>
                     </div>
                     {rec && <Badge text={rec.Decision} size="lg" />}
                   </div>
                   <ForecastChart data={forecast} />
                   {!forecast && <div style={s.emptyState}>No forecast found for this item.</div>}
                   <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
+                    {forecast?.ensemble && <span style={{ fontSize: 12, color: "#78716c" }}><span style={{ color: "#10b981", fontWeight: 700 }}>— </span>Ensemble (60% ARIMA + 40% Prophet, dashes green)</span>}
                     {forecast?.prophet && <span style={{ fontSize: 12, color: "#78716c" }}><span style={{ color: "#3b82f6", fontWeight: 700 }}>— </span>Prophet (dashed blue)</span>}
                     {forecast?.arima   && <span style={{ fontSize: 12, color: "#78716c" }}><span style={{ color: "#7c3aed", fontWeight: 700 }}>— </span>ARIMA (dotted purple) · {forecast.arima.model_order}</span>}
                   </div>
@@ -249,14 +336,79 @@ export default function App() {
           {tab === "Recommendations" && (
             <div>
               <h2 style={s.h2}>Stock Recommendations</h2>
+              
+              {/* Search bar */}
+              <div style={{ marginBottom: 16 }}>
+                <input
+                  type="text"
+                  placeholder="Search by item ID, store, or category…"
+                  value={recSearchQuery}
+                  onChange={e => { setRecSearchQuery(e.target.value); setRecPage(0); }}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    fontSize: 13,
+                    border: "1px solid #e7e5e4",
+                    borderRadius: 6,
+                    fontFamily: "inherit",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+
+              {/* Decision filter */}
               <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ fontSize: 13, color: "#78716c" }}>Filter:</span>
                 {["", "Increase", "Hold", "Decrease"].map(d => (
-                  <button key={d} onClick={() => setDecFilter(d)} style={s.pill(decFilter === d)}>{d || "All"}</button>
+                  <button key={d} onClick={() => { setDecFilter(d); setRecPage(0); }} style={s.pill(decFilter === d)}>{d || "All"}</button>
                 ))}
-                <span style={{ fontSize: 12, color: "#a8a29e", marginLeft: "auto" }}>{recList.length} items</span>
+                <span style={{ fontSize: 12, color: "#a8a29e", marginLeft: "auto" }}>
+                  {filteredRecs.length} of {recTotal} items
+                </span>
               </div>
-              <div style={s.card}><RecommendationsTable items={recList} /></div>
+              
+              <div style={s.card}><RecommendationsTable items={paginatedRecs} /></div>
+              
+              {/* Pagination controls */}
+              {totalPages > 1 && (
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginTop: 20 }}>
+                  <button
+                    onClick={() => setRecPage(Math.max(0, recPage - 1))}
+                    disabled={recPage === 0}
+                    style={{
+                      padding: "8px 12px",
+                      fontSize: 12,
+                      border: "1px solid #e7e5e4",
+                      borderRadius: 4,
+                      background: recPage === 0 ? "#f5f5f4" : "#fff",
+                      cursor: recPage === 0 ? "not-allowed" : "pointer",
+                      color: recPage === 0 ? "#a8a29e" : "#1c1917",
+                      fontWeight: 500
+                    }}
+                  >
+                    ← Previous
+                  </button>
+                  <span style={{ fontSize: 12, color: "#78716c", minWidth: 120, textAlign: "center" }}>
+                    Page {recPage + 1} of {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setRecPage(Math.min(totalPages - 1, recPage + 1))}
+                    disabled={recPage === totalPages - 1}
+                    style={{
+                      padding: "8px 12px",
+                      fontSize: 12,
+                      border: "1px solid #e7e5e4",
+                      borderRadius: 4,
+                      background: recPage === totalPages - 1 ? "#f5f5f4" : "#fff",
+                      cursor: recPage === totalPages - 1 ? "not-allowed" : "pointer",
+                      color: recPage === totalPages - 1 ? "#a8a29e" : "#1c1917",
+                      fontWeight: 500
+                    }}
+                  >
+                    Next →
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

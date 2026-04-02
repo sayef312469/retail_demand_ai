@@ -66,8 +66,8 @@ STABILITY_LOW_THRESHOLD = 0.40
 ANOMALY_SERIOUS_THRESHOLD = 0.15   # >15% of months are anomalies
 
 # Model agreement: below this → low confidence recommendation
-AGREEMENT_LOW_THRESHOLD  = 0.70
-AGREEMENT_HIGH_THRESHOLD = 0.90
+AGREEMENT_LOW_THRESHOLD  = 0.55   # only penalise serious disagreement
+AGREEMENT_HIGH_THRESHOLD = 0.80
 
 
 # ---------------------------------------------------------------------------

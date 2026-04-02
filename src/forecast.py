@@ -1,5 +1,4 @@
-"""
-forecast.py — Unified pipeline runner.
+"""forecast.py — Unified pipeline runner.
 
 Runs the full data → forecast pipeline in sequence:
     Step 1: Preprocess raw M5 data  (preprocess.py)
@@ -7,7 +6,7 @@ Runs the full data → forecast pipeline in sequence:
     Step 3: Train ARIMA models      (train_arima.py)
 
 Usage examples:
-    # Default — top 200 items, both models (recommended for first run)
+    # Default — top 500 items, both models (recommended for balanced coverage)
     python src/forecast.py
 
     # Run only on specific stores or categories
@@ -16,8 +15,11 @@ Usage examples:
     # Train only ARIMA, skipping preprocessing (data already ready)
     python src/forecast.py --model arima --skip-preprocess
 
-    # Bigger run — top 500 items, Prophet only
-    python src/forecast.py --top-items 500 --model prophet
+    # Bigger run — top 1000 items for comprehensive coverage
+    python src/forecast.py --top-items 1000 --model both
+
+    # Quick run — top 100 items for testing
+    python src/forecast.py --top-items 100
 """
 
 import argparse
@@ -96,8 +98,8 @@ After this pipeline completes, run these next:
         help="Category IDs to include (default: all categories)",
     )
     parser.add_argument(
-        "--top-items", type=int, default=200,
-        help="Keep top N items by total sales per filters (0 = all, default: 200)",
+        "--top-items", type=int, default=500,
+        help="Keep top N items by total sales per filters (0 = all, default: 500)",
     )
     parser.add_argument(
         "--model", choices=["prophet", "arima", "both"], default="both",

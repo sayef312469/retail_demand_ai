@@ -19,7 +19,11 @@ export const api = {
     if (viab) p.set("viability",  viab);
     return get(`/items?${p}`);
   },
-  forecast:        (store, item, model)  => get(`/forecast/${store}/${encodeURIComponent(item)}?model=${model || "both"}`),
+  forecast:        (store, item, model, months)  => {
+    const p = new URLSearchParams({ model: model || "both" });  // "both" now includes ensemble
+    if (months) p.set("months", months);
+    return get(`/forecast/${store}/${encodeURIComponent(item)}?${p}`);
+  },
   pvi:             (store, item)         => get(`/pvi/${store}/${encodeURIComponent(item)}`),
   pviList:         (store, viab, cat, limit, offset) => {
     const p = new URLSearchParams();

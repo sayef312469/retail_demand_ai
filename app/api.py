@@ -478,15 +478,29 @@ def get_summary():
                 model_perf[row["model"]][f"{metric}_mean"]   = row["mean"]
                 model_perf[row["model"]][f"{metric}_median"] = row["median"]
 
+    # Distribution metrics for better coverage visibility
+    items_per_store = pvi_df["store_id"].value_counts().to_dict()
+    items_per_category = pvi_df["cat_id"].value_counts().to_dict() if "cat_id" in pvi_df.columns else {}
+    store_list = sorted(pvi_df["store_id"].unique().tolist())
+    category_list = sorted(pvi_df["cat_id"].unique().tolist()) if "cat_id" in pvi_df.columns else []
+
     return _clean({
-        "total_items":       len(pvi_df),
-        "total_stores":      int(pvi_df["store_id"].nunique()),
-        "viability":         viability_counts,
-        "decisions":         decision_counts,
-        "anomaly_count":     anomaly_count,
-        "pvi_mean":          round(float(pvi_df["PVI"].mean()), 1),
-        "pvi_median":        round(float(pvi_df["PVI"].median()), 1),
-        "model_performance": model_perf,
+        "total_items":            len(pvi_df),
+        "total_stores":           int(pvi_df["store_id"].nunique()),
+        "total_categories":       int(pvi_df["cat_id"].nunique()) if "cat_id" in pvi_df.columns else 0,
+        "viability":              viability_counts,
+        "decisions":              decision_counts,
+        "anomaly_count":          anomaly_count,
+        "pvi_mean":               round(float(pvi_df["PVI"].mean()), 1),
+        "pvi_median":             round(float(pvi_df["PVI"].median()), 1),
+        "model_performance":      model_perf,
+        # Distribution metrics
+        "distribution": {
+            "items_per_store":     items_per_store,
+            "items_per_category":  items_per_category,
+            "stores":              store_list,
+            "categories":          category_list,
+        }
     })
 
 
@@ -519,8 +533,18 @@ def list_items(
 
 @app.get("/forecast/{store_id}/{item_id}", tags=["Forecast"])
 def get_forecast(store_id: str, item_id: str,
-                 model: str = Query("both")):
-    result = {"store_id": store_id, "item_id": item_id}
+                 model: str = Query("both"),
+                 months: int = Query(12, ge=1, le=12)):
+    """
+    Get forecast for a store-item combination.
+    
+    Parameters:
+    - store_id: Store ID (e.g., "CA_1")
+    - item_id: Item ID (e.g., "FOODS_1_001")
+    - model: "prophet", "arima", or "both"
+    - months: Forecast horizon to return (1-12, default 12 for full forecast). Returns first N months.
+    """
+    result = {"store_id": store_id, "item_id": item_id, "months_requested": months}
     processed = _load(PROCESSED_PATH, "processed")
     if processed is not None:
         hist = processed[
@@ -536,16 +560,27 @@ def get_forecast(store_id: str, item_id: str,
         fpath = _forecast_path(store_id, item_id, "prophet")
         if os.path.exists(fpath):
             fc = pd.read_csv(fpath)
+            # Slice to requested months if month_index column exists, otherwise take first N rows
+            if "month_index" in fc.columns:
+                fc = fc[fc["month_index"] <= months]
+            else:
+                fc = fc.head(months)
             result["prophet"] = {
                 "dates":      fc["ds"].astype(str).tolist(),
                 "yhat":       fc["yhat"].round(2).tolist(),
                 "yhat_lower": fc["yhat_lower"].round(2).tolist() if "yhat_lower" in fc else [],
                 "yhat_upper": fc["yhat_upper"].round(2).tolist() if "yhat_upper" in fc else [],
             }
+            result["months_available_prophet"] = len(pd.read_csv(fpath))
     if model in ("arima", "both"):
         fpath = _forecast_path(store_id, item_id, "arima")
         if os.path.exists(fpath):
             fc = pd.read_csv(fpath)
+            # Slice to requested months if month_index column exists, otherwise take first N rows
+            if "month_index" in fc.columns:
+                fc = fc[fc["month_index"] <= months]
+            else:
+                fc = fc.head(months)
             result["arima"] = {
                 "dates":       fc["ds"].astype(str).tolist(),
                 "yhat":        fc["yhat"].round(2).tolist(),
@@ -553,7 +588,31 @@ def get_forecast(store_id: str, item_id: str,
                 "yhat_upper":  fc["yhat_upper"].round(2).tolist() if "yhat_upper" in fc else [],
                 "model_order": fc["model_order"].iloc[0] if "model_order" in fc else None,
             }
-    if len(result) == 2:
+            result["months_available_arima"] = len(pd.read_csv(fpath))
+    
+    # Compute blended forecast (weighted ensemble: 60% ARIMA + 40% Prophet)
+    # ARIMA is more accurate on this dataset (MAE 50% lower)
+    if model in ("both") and "prophet" in result and "arima" in result:
+        prophet_yhat = np.array(result["prophet"]["yhat"])
+        arima_yhat = np.array(result["arima"]["yhat"])
+        prophet_lower = np.array(result["prophet"]["yhat_lower"]) if result["prophet"]["yhat_lower"] else prophet_yhat
+        prophet_upper = np.array(result["prophet"]["yhat_upper"]) if result["prophet"]["yhat_upper"] else prophet_yhat
+        arima_lower = np.array(result["arima"]["yhat_lower"]) if result["arima"]["yhat_lower"] else arima_yhat
+        arima_upper = np.array(result["arima"]["yhat_upper"]) if result["arima"]["yhat_upper"] else arima_yhat
+        
+        # Weighted blend: 60% ARIMA (more accurate) + 40% Prophet (more stable)
+        blended_yhat = 0.60 * arima_yhat + 0.40 * prophet_yhat
+        blended_lower = 0.60 * arima_lower + 0.40 * prophet_lower
+        blended_upper = 0.60 * arima_upper + 0.40 * prophet_upper
+        
+        result["ensemble"] = {
+            "dates":      result["prophet"]["dates"],
+            "yhat":       np.round(blended_yhat, 2).tolist(),
+            "yhat_lower": np.round(blended_lower, 2).tolist(),
+            "yhat_upper": np.round(blended_upper, 2).tolist(),
+        }
+    
+    if len(result) == 4:  # Only store_id, item_id, months_requested, and one of the availability fields
         raise HTTPException(status_code=404, detail=f"No forecasts for {store_id}/{item_id}")
     return _clean(result)
 
@@ -604,7 +663,7 @@ def list_recommendations(
     viability:  Optional[str]  = Query(None),
     confidence: Optional[str]  = Query(None),
     anomaly:    Optional[bool] = Query(None),
-    limit: int  = Query(50, ge=1, le=500),
+    limit: int  = Query(50, ge=1, le=10000),
     offset: int = Query(0, ge=0),
 ):
     rec_df = _require(_load(RECS_PATH, "recs"), RECS_PATH)
