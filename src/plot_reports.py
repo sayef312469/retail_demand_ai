@@ -263,13 +263,26 @@ def plot_r2_distribution():
     ax.set_xticks([1, 2])
     ax.set_xticklabels(labels)
     ax.set_ylabel("R² score")
-    ax.set_ylim(-0.5, 1.1)
+
+    # FIX 1: Expand ylim to show actual data range, not cut it off
+    all_vals = [v for d in data for v in d]
+    y_min = max(np.percentile(all_vals, 1), -15)   # clip extreme outliers for display
+    ax.set_ylim(y_min - 0.5, 1.3)
+
     ax.grid(axis="y", linestyle="--", alpha=0.5)
     ax.legend(fontsize=9, framealpha=0.8)
 
+    # FIX 2: Clamp text position inside axes bounds so it doesn't blow up the canvas
+    y_lo, y_hi = ax.get_ylim()
     for i, (d, color) in enumerate(zip(data, colors), 1):
         if len(d):
-            ax.text(i, np.median(d), f"  med={np.median(d):.2f}",
+            med = np.median(d)
+            # Place label inside axes — if median is below view, pin to bottom
+            text_y = np.clip(med, y_lo + 0.3, y_hi - 0.1)
+            label  = f"  med={med:.2f}"
+            if med < y_lo + 0.3:
+                label = f"  med={med:.2f} (below view)"
+            ax.text(i, text_y, label,
                     va="center", fontsize=9, color=color, fontweight="bold")
 
     fig.tight_layout()
