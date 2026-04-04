@@ -1,14 +1,3 @@
-"""
-train_prophet.py — Prophet forecasting model for M5 retail data.
-
-Fits a Facebook Prophet model per (store_id, item_id) series and generates
-12-month ahead forecasts with 95% confidence intervals.
-
-Requires: data/processed/processed_m5.csv (run preprocess.py first)
-Output  : data/forecast/prophet/forecast_{store_id}_{safe_item_id}.csv
-          Columns: ds, yhat, yhat_lower, yhat_upper, month_index
-"""
-
 import os
 import warnings
 import pandas as pd
@@ -18,12 +7,11 @@ warnings.filterwarnings("ignore")
 
 PROCESSED_PATH   = "data/processed/processed_m5.csv"
 FORECAST_DIR     = "data/forecast/prophet"
-FORECAST_PERIODS = 12   # months ahead
-MIN_SERIES_LEN   = 20   # Prophet needs at least this many data points
+FORECAST_PERIODS = 12
+MIN_SERIES_LEN   = 20
 
 
-def safe_item_id(item_id: str) -> str:
-    """Convert item_id to a filesystem-safe string (replace _ with -)."""
+def safe_item_id(item_id: str) -> str:  
     return item_id.replace("_", "-")
 
 
@@ -48,7 +36,6 @@ def train_prophet_models():
             skipped += 1
             continue
 
-        # Prophet requires columns named 'ds' and 'y'
         prophet_df = grp[["date", "monthly_sales"]].rename(
             columns={"date": "ds", "monthly_sales": "y"}
         )
@@ -58,10 +45,9 @@ def train_prophet_models():
             weekly_seasonality=False,
             daily_seasonality=False,
             interval_width=0.95,
-            changepoint_prior_scale=0.05,   # mild — avoid overfitting short series
+            changepoint_prior_scale=0.05,
         )
 
-        # Add holiday and SNAP regressors if available
         if "holiday_days" in grp.columns:
             prophet_df["holiday_days"] = grp["holiday_days"].values
             model.add_regressor("holiday_days")
@@ -73,7 +59,6 @@ def train_prophet_models():
 
         future = model.make_future_dataframe(periods=FORECAST_PERIODS, freq="MS")
 
-        # Fill regressors for future periods with their training means
         if "holiday_days" in prophet_df.columns:
             future["holiday_days"] = prophet_df["holiday_days"].mean()
         if "snap_days" in prophet_df.columns:
@@ -81,7 +66,6 @@ def train_prophet_models():
 
         forecast = model.predict(future)
 
-        # Save forecast horizon only (last FORECAST_PERIODS rows)
         horizon = forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]].tail(FORECAST_PERIODS).copy()
         horizon["yhat"]        = horizon["yhat"].clip(lower=0)
         horizon["yhat_lower"]  = horizon["yhat_lower"].clip(lower=0)

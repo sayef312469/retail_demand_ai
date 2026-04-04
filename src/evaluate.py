@@ -1,34 +1,3 @@
-"""
-evaluate.py — Forecast model evaluation with full metric suite.
-
-Metrics computed
-----------------
-Regression metrics (appropriate for demand forecasting):
-  MAE   — Mean Absolute Error: average absolute gap between forecast and actual
-  RMSE  — Root Mean Squared Error: penalises large errors more than MAE
-  MAPE  — Mean Absolute Percentage Error: scale-independent, skips zero actuals
-  WAPE  — Weighted Absolute Percentage Error: robust alternative to MAPE
-  R2    — Coefficient of Determination: 1 = perfect, 0 = no better than mean
-  bias  — Mean signed error: positive = over-predicts, negative = under-predicts
-
-NOT computed (and why):
-  Precision/Recall/F1/Confusion Matrix — these are classification metrics.
-  Demand forecasting is a regression problem (predicting a continuous sales
-  number), so these do not apply. The stock recommendation (Increase/Hold/
-  Decrease) is classification, but it is rule-based with no ground-truth
-  labels available, making supervised evaluation impossible.
-
-Method: Held-out evaluation
-  The last 3 months of each historical series are withheld as a test set.
-  Both Prophet and ARIMA are evaluated on the same held-out window, making
-  the comparison fair.
-
-Outputs
--------
-  data/eval_metrics.csv    — per-series metrics for every item × model
-  data/eval_summary.csv    — aggregate stats (mean, median, std) per metric
-"""
-
 import os
 import glob
 import numpy as np
@@ -49,7 +18,6 @@ HOLDOUT_MONTHS = 3
 # ---------------------------------------------------------------------------
 
 def safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """MAPE — skips zero-actual months to avoid division by zero."""
     mask = y_true > 1e-6
     if mask.sum() == 0:
         return np.nan
@@ -57,12 +25,7 @@ def safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def safe_wape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """
-    WAPE (Weighted Absolute Percentage Error).
-    More robust than MAPE — weights errors by actual volume so high-selling
-    items contribute more to the aggregate score.
-    Formula: sum(|actual - pred|) / sum(|actual|)
-    """
+    
     total_actual = np.sum(np.abs(y_true))
     if total_actual < 1e-6:
         return np.nan
@@ -70,12 +33,7 @@ def safe_wape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def safe_r2(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """
-    R² (Coefficient of Determination).
-    1.0  = perfect forecast
-    0.0  = no better than predicting the mean
-    <0   = worse than predicting the mean (bad model)
-    """
+
     if len(y_true) < 2 or np.var(y_true) < 1e-9:
         return np.nan
     return float(r2_score(y_true, y_pred))
@@ -122,10 +80,8 @@ def evaluate_one_series(
         "model":       model,
         "n_test_obs":  len(y_true),
         "n_train_obs": n_obs - len(y_true),
-        # actual values for scatter plots
         "y_true_mean": round(float(np.mean(y_true)), 2),
         "y_pred_mean": round(float(np.mean(y_pred)), 2),
-        # metrics
         "MAE":         round(mae_val,  2),
         "RMSE":        round(rmse_val, 2),
         "MAPE":        round(mape_val, 2) if not np.isnan(mape_val) else None,
@@ -184,7 +140,6 @@ def evaluate_models():
 
         y_true = series[-HOLDOUT_MONTHS:]
 
-        # Prophet
         fc_prophet   = pd.read_csv(fpath)
         y_pred_prophet = fc_prophet["yhat"].values[:HOLDOUT_MONTHS]
         if len(y_pred_prophet) == HOLDOUT_MONTHS:
@@ -192,7 +147,6 @@ def evaluate_models():
                 y_true, y_pred_prophet, store_id, item_id, "prophet", n_obs, cat_id
             ))
 
-        # ARIMA
         if key in arima_lookup:
             fc_arima   = pd.read_csv(arima_lookup[key])
             y_pred_arima = fc_arima["yhat"].values[:HOLDOUT_MONTHS]
@@ -207,7 +161,6 @@ def evaluate_models():
 
     metrics_df = pd.DataFrame(all_metrics)
 
-    # Aggregate summary per model
     METRIC_COLS = ["MAE", "RMSE", "MAPE", "WAPE", "R2", "bias"]
     summary_rows = []
     for model_name, grp in metrics_df.groupby("model"):
@@ -232,7 +185,6 @@ def evaluate_models():
     metrics_df.to_csv(EVAL_OUTPUT,         index=False)
     summary_df.to_csv(EVAL_SUMMARY_OUTPUT, index=False)
 
-    # Print report
     print(f"\n{'='*60}")
     print(f"Evaluation complete  —  holdout: last {HOLDOUT_MONTHS} months")
     print(f"  Series scored: {len(metrics_df['item_id'].unique())}  |  Skipped: {skipped}\n")

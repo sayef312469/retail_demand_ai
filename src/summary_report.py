@@ -1,13 +1,3 @@
-"""
-summary_report.py — Pipeline summary table.
-
-Prints a clean, structured summary of all pipeline outputs to the terminal.
-Run this after the full pipeline completes.
-
-Usage:
-    python src/summary_report.py
-"""
-
 import os
 import numpy as np
 import pandas as pd
@@ -48,7 +38,6 @@ def run():
     print(f"  RETAIL DEMAND AI — PIPELINE SUMMARY REPORT")
     print(f"{'#'*65}")
 
-    # ── 1. Dataset ────────────────────────────────────────────────────────
     section("1. DATASET OVERVIEW")
     processed = load(PROCESSED_PATH, "processed data")
     if processed is not None:
@@ -67,7 +56,6 @@ def run():
         if "avg_price" in processed.columns:
             print(f"  Price range     : ${processed['avg_price'].min():.2f} – ${processed['avg_price'].max():.2f}")
 
-    # ── 2. PVI ────────────────────────────────────────────────────────────
     section("2. PRODUCT VIABILITY INDEX (PVI)")
     pvi = load(PVI_PATH, "PVI scores")
     if pvi is not None:
@@ -124,7 +112,6 @@ def run():
                       f"| median {ma.median():.2%}  "
                       f"| items with agreement < 70%: {(ma < 0.70).sum()}")
 
-    # ── 3. Recommendations ────────────────────────────────────────────────
     section("3. STOCK RECOMMENDATIONS")
     recs = load(RECS_PATH, "recommendations")
     if recs is not None:
@@ -180,7 +167,6 @@ def run():
         else:
             print("  No Increase recommendations.")
 
-    # ── 4. Evaluation ─────────────────────────────────────────────────────
     section("4. MODEL EVALUATION (Held-out: last 3 months)")
     eval_sum = load(EVAL_SUM_PATH, "eval summary")
     if eval_sum is not None:
@@ -196,7 +182,6 @@ def run():
             a_mean   = a["mean"].values[0]   if len(a) else None
             a_med    = a["median"].values[0] if len(a) else None
 
-            # Winner: for R2 higher is better, for others lower is better
             if p_mean is not None and a_mean is not None:
                 if metric == "R2":
                     winner = "ARIMA" if a_mean > p_mean else "Prophet"
@@ -217,7 +202,6 @@ def run():
         print(f"  Test window     : last 3 months per series (held-out)")
         print(f"  Note: Lower MAE/RMSE/MAPE/WAPE = better. Higher R2 = better. Bias near 0 = unbiased.")
 
-    # ── 5. Ensemble ───────────────────────────────────────────────────────
     if eval_sum is not None:
         p_mae = eval_sum[(eval_sum["model"]=="prophet")&(eval_sum["metric"]=="MAE")]["mean"]
         a_mae = eval_sum[(eval_sum["model"]=="arima")  &(eval_sum["metric"]=="MAE")]["mean"]
@@ -231,7 +215,6 @@ def run():
             print(f"  Rationale       : Higher weight to the more accurate model.")
             print(f"                    Prophet retained for trend and seasonality stability.")
 
-    # ── 6. Final ──────────────────────────────────────────────────────────
     section("6. PIPELINE SUMMARY")
     parts = []
     if processed is not None: parts.append(f"✓ Preprocessed  {processed['item_id'].nunique()} items")

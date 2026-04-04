@@ -1,17 +1,3 @@
-"""
-train_arima.py — ARIMA demand forecasting for M5 retail data.
-
-For each (store_id, item_id) time series:
-  1. Tests stationarity with the Augmented Dickey-Fuller test.
-  2. Auto-selects the best ARIMA(p, d, q) order by minimising AIC
-     over a small grid (avoids heavy pmdarima dependency).
-  3. Generates a 12-month ahead forecast with 95% confidence intervals.
-
-Requires: data/processed/processed_m5.csv (run preprocess.py first)
-Output  : data/forecast/arima/forecast_{store_id}_{safe_item_id}.csv
-          Columns: ds, yhat, yhat_lower, yhat_upper, model_order, month_index
-"""
-
 import os
 import warnings
 import numpy as np
@@ -24,10 +10,9 @@ warnings.filterwarnings("ignore")
 
 PROCESSED_PATH   = "data/processed/processed_m5.csv"
 FORECAST_DIR     = "data/forecast/arima"
-FORECAST_PERIODS = 12   # months ahead
-MIN_SERIES_LEN   = 24   # need at least 24 months for reliable ARIMA
+FORECAST_PERIODS = 12
+MIN_SERIES_LEN   = 24
 
-# Compact AIC grid — balances speed and model quality
 P_RANGE = [0, 1, 2]
 D_RANGE = [0, 1]
 Q_RANGE = [0, 1, 2]
@@ -38,7 +23,7 @@ Q_RANGE = [0, 1, 2]
 # ---------------------------------------------------------------------------
 
 def is_stationary(series: pd.Series, alpha: float = 0.05) -> bool:
-    """Return True if the ADF test rejects the unit-root null at level alpha."""
+
     try:
         p_value = adfuller(series.dropna(), autolag="AIC")[1]
         return p_value < alpha
@@ -47,7 +32,6 @@ def is_stationary(series: pd.Series, alpha: float = 0.05) -> bool:
 
 
 def select_d(series: pd.Series) -> int:
-    """Choose d = 0 (stationary) or d = 1 (one difference needed)."""
     if is_stationary(series):
         return 0
     if is_stationary(series.diff().dropna()):
@@ -56,18 +40,14 @@ def select_d(series: pd.Series) -> int:
 
 
 def auto_arima_aic(series: pd.Series, p_values, d_values, q_values):
-    """
-    Grid-search ARIMA(p, d, q) and return the model with the lowest AIC.
-    Skips trivial ARIMA(0, d, 0) models.
-    Returns (fitted_model, (p, d, q)) — or (None, None) on total failure.
-    """
+    
     best_aic   = np.inf
     best_order = None
     best_fit   = None
 
     for p, d, q in product(p_values, d_values, q_values):
         if p == 0 and q == 0:
-            continue  # trivial white-noise / random-walk — not useful
+            continue
         try:
             fit = ARIMA(series, order=(p, d, q)).fit()
             if fit.aic < best_aic:
@@ -85,24 +65,16 @@ def auto_arima_aic(series: pd.Series, p_values, d_values, q_values):
 # ---------------------------------------------------------------------------
 
 def forecast_one_series(series: pd.Series, periods: int = FORECAST_PERIODS):
-    """
-    Fit best ARIMA model and return a DataFrame of forecasted values.
-
-    Returns (forecast_df, order) or (None, None) if the series is too
-    short or all ARIMA orders fail to converge.
-    """
+    
     series = series.dropna()
 
     if len(series) < MIN_SERIES_LEN:
         return None, None
 
-    # Step 1 — choose d via stationarity test
     d = select_d(series)
 
-    # Step 2 — grid-search p and q
     model, order = auto_arima_aic(series, P_RANGE, [d], Q_RANGE)
 
-    # Fallback if grid search fails entirely
     if model is None:
         try:
             model = ARIMA(series, order=(1, 1, 1)).fit()
@@ -110,11 +82,9 @@ def forecast_one_series(series: pd.Series, periods: int = FORECAST_PERIODS):
         except Exception:
             return None, None
 
-    # Step 3 — generate forecast with 95% CI
     forecast_obj = model.get_forecast(steps=periods)
     summary      = forecast_obj.summary_frame(alpha=0.05)
 
-    # Build a date index for the forecast horizon
     last_date   = series.index[-1]
     future_dates = pd.date_range(
         start=last_date + pd.DateOffset(months=1),
@@ -131,7 +101,6 @@ def forecast_one_series(series: pd.Series, periods: int = FORECAST_PERIODS):
         "month_index":  list(range(1, periods + 1)),
     })
 
-    # Sales cannot be negative
     for col in ["yhat", "yhat_lower", "yhat_upper"]:
         result[col] = result[col].clip(lower=0)
 

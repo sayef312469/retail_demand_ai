@@ -1,23 +1,3 @@
-"""
-preprocess.py — M5 Forecasting dataset pipeline.
-
-Converts the three raw M5 CSV files into a monthly panel
-ready for Prophet and ARIMA forecasting.
-
-Expected files in data/raw/:
-    sales_train_evaluation.csv
-    sell_prices.csv
-    calendar.csv
-
-Download from:
-    https://www.kaggle.com/competitions/m5-forecasting-accuracy/data
-
-Typical usage:
-    python src/preprocess.py                    # top 200 items, all stores
-    python src/preprocess.py --top-items 500    # larger subset
-    python src/preprocess.py --stores CA_1 TX_1 --categories FOODS
-"""
-
 import os
 import argparse
 import time
@@ -37,10 +17,7 @@ CALENDAR_FILE = os.path.join(RAW_DIR, "calendar.csv")
 # ---------------------------------------------------------------------------
 
 def load_and_melt_sales(sample_stores=None, sample_categories=None, top_n_items=200):
-    """
-    Load sales_train_evaluation.csv and melt wide → long.
-    Rows = items; columns d_1…d_1941 = daily unit sales.
-    """
+    
     print("[1/5] Loading sales data…")
     df = pd.read_csv(SALES_FILE)
     print(f"      Raw shape: {df.shape}  ({len(df)} items × {df.shape[1]} cols)")
@@ -78,11 +55,7 @@ def load_and_melt_sales(sample_stores=None, sample_categories=None, top_n_items=
 # ---------------------------------------------------------------------------
 
 def load_calendar():
-    """
-    Load calendar.csv.
-    Maps day-id (d_1…d_1969) → actual date, week-id, holiday and SNAP flags.
-    SNAP days are food-stamp assistance days — they significantly spike food demand.
-    """
+    
     print("[2/5] Loading calendar…")
     cal = pd.read_csv(CALENDAR_FILE)
     cal["date"] = pd.to_datetime(cal["date"])
@@ -99,11 +72,7 @@ def load_calendar():
 # ---------------------------------------------------------------------------
 
 def load_prices():
-    """
-    Load sell_prices.csv.
-    Provides weekly sell price per (store_id, item_id, wm_yr_wk).
-    This is what the original Walmart-only dataset was missing.
-    """
+    
     print("[3/5] Loading prices…")
     prices = pd.read_csv(PRICES_FILE)
     prices["sell_price"] = pd.to_numeric(prices["sell_price"], errors="coerce")
@@ -115,16 +84,7 @@ def load_prices():
 # ---------------------------------------------------------------------------
 
 def aggregate_to_monthly(df_long, calendar, prices):
-    """
-    Join on calendar (get dates) and prices (get sell_price),
-    then collapse daily rows → monthly aggregates.
-
-    Output columns:
-        store_id, item_id, dept_id, cat_id,
-        date (month-start),
-        monthly_sales, avg_price,
-        holiday_days, snap_days, trading_days
-    """
+    
     print("[4/5] Merging and aggregating to monthly…")
 
     df = df_long.merge(calendar, on="d", how="left")
@@ -149,7 +109,6 @@ def aggregate_to_monthly(df_long, calendar, prices):
     monthly = monthly.rename(columns={"month_start": "date"})
     monthly = monthly.sort_values(["store_id", "item_id", "date"]).reset_index(drop=True)
 
-    # Drop permanently dead SKUs (zero sales across entire history)
     active_idx = monthly.groupby(["store_id", "item_id"])["monthly_sales"].sum()
     active_idx = active_idx[active_idx > 0].index
     monthly = monthly.set_index(["store_id", "item_id"])
@@ -163,10 +122,7 @@ def aggregate_to_monthly(df_long, calendar, prices):
 # ---------------------------------------------------------------------------
 
 def add_lag_features(df):
-    """
-    Lag and rolling-window features per store-item.
-    Used downstream by evaluation and PVI modules.
-    """
+    
     print("[5/5] Computing lag and rolling features…")
     df = df.sort_values(["store_id", "item_id", "date"]).copy()
     grp = df.groupby(["store_id", "item_id"])["monthly_sales"]
@@ -186,20 +142,7 @@ def add_lag_features(df):
 # ---------------------------------------------------------------------------
 
 def preprocess_m5(sample_stores=None, sample_categories=None, top_n_items=200):
-    """
-    Full preprocessing pipeline for the M5 Forecasting dataset.
-
-    Parameters
-    ----------
-    sample_stores : list[str] | None
-        Restrict to specific store IDs, e.g. ["CA_1", "TX_2"].
-        Available stores: CA_1..CA_4, TX_1..TX_3, WI_1..WI_3.
-    sample_categories : list[str] | None
-        Restrict to "FOODS", "HOBBIES", or "HOUSEHOLD".
-    top_n_items : int | None
-        Keep only the top-N items by total historical sales (after filters).
-        Use 200 for quick dev runs; None to process all items (slow).
-    """
+    
     for fpath in [SALES_FILE, PRICES_FILE, CALENDAR_FILE]:
         if not os.path.exists(fpath):
             raise FileNotFoundError(

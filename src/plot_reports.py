@@ -1,26 +1,3 @@
-"""
-plot_reports.py — Comprehensive visualisation suite.
-
-Generates 8 publication-quality plots saved to outputs/plots/.
-Run after the full pipeline (forecast → pvi → recommend → evaluate).
-
-Plots generated
----------------
-1. forecast_vs_actual_top5.png  — Forecast vs actual sales for top-5 PVI items
-2. mae_rmse_comparison.png      — Grouped bar: MAE & RMSE, Prophet vs ARIMA
-3. mape_wape_comparison.png     — Grouped bar: MAPE & WAPE, Prophet vs ARIMA
-4. r2_comparison.png            — Box plot: R² distribution per model
-5. residual_distribution.png    — Histogram of forecast errors per model
-6. actual_vs_predicted.png      — Scatter: actual vs predicted sales
-7. pvi_distribution.png         — PVI histogram coloured by viability category
-8. pvi_by_category.png          — Avg PVI per product category with breakdown
-9. decision_breakdown.png       — Stacked bar: decisions per store
-
-Usage
------
-    python src/plot_reports.py
-"""
-
 import os
 import glob
 import warnings
@@ -32,9 +9,8 @@ import matplotlib.patches as mpatches
 from matplotlib.gridspec import GridSpec
 
 warnings.filterwarnings("ignore")
-matplotlib.use("Agg")   # non-interactive backend — safe for servers
+matplotlib.use("Agg")
 
-# ── Paths ──────────────────────────────────────────────────────────────────
 PROCESSED_PATH       = "data/processed/processed_m5.csv"
 PROPHET_FORECAST_DIR = "data/forecast/prophet"
 ARIMA_FORECAST_DIR   = "data/forecast/arima"
@@ -44,7 +20,6 @@ EVAL_PATH            = "data/eval_metrics.csv"
 EVAL_SUMMARY_PATH    = "data/eval_summary.csv"
 OUT_DIR              = "outputs/plots"
 
-# ── Design tokens ──────────────────────────────────────────────────────────
 PROPHET_COLOR  = "#3b82f6"   # blue
 ARIMA_COLOR    = "#7c3aed"   # purple
 HIGH_COLOR     = "#15803d"   # green
@@ -264,20 +239,17 @@ def plot_r2_distribution():
     ax.set_xticklabels(labels)
     ax.set_ylabel("R² score")
 
-    # FIX 1: Expand ylim to show actual data range, not cut it off
     all_vals = [v for d in data for v in d]
-    y_min = max(np.percentile(all_vals, 1), -15)   # clip extreme outliers for display
+    y_min = max(np.percentile(all_vals, 1), -15)
     ax.set_ylim(y_min - 0.5, 1.3)
 
     ax.grid(axis="y", linestyle="--", alpha=0.5)
     ax.legend(fontsize=9, framealpha=0.8)
 
-    # FIX 2: Clamp text position inside axes bounds so it doesn't blow up the canvas
     y_lo, y_hi = ax.get_ylim()
     for i, (d, color) in enumerate(zip(data, colors), 1):
         if len(d):
             med = np.median(d)
-            # Place label inside axes — if median is below view, pin to bottom
             text_y = np.clip(med, y_lo + 0.3, y_hi - 0.1)
             label  = f"  med={med:.2f}"
             if med < y_lo + 0.3:
@@ -358,7 +330,6 @@ def plot_actual_vs_predicted():
         ax.plot([lo, hi], [lo, hi], color=TEXT_COLOR, linewidth=1.5,
                 linestyle="--", label="Perfect forecast")
 
-        # Regression line
         if len(x) > 2:
             m, b = np.polyfit(x, y, 1)
             xs   = np.linspace(lo, hi, 100)
@@ -392,7 +363,6 @@ def plot_pvi_distribution():
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
     fig.suptitle("Product Viability Index (PVI) Distribution", fontsize=14, fontweight="bold")
 
-    # Left: overall histogram coloured by viability zone
     ax = axes[0]
     bins = np.linspace(0, 100, 26)
     for viab, color in [("High", HIGH_COLOR), ("Medium", MEDIUM_COLOR), ("Low", LOW_COLOR)]:
@@ -415,7 +385,6 @@ def plot_pvi_distribution():
                 transform=ax.transAxes, ha="right", fontsize=10,
                 color=color, fontweight="bold")
 
-    # Right: PVI by category
     ax2 = axes[1]
     if "cat_id" in pvi.columns:
         cat_means = pvi.groupby(["cat_id", "viability"]).size().unstack(fill_value=0)
@@ -508,7 +477,6 @@ def plot_decision_breakdown():
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     fig.suptitle("Stock Recommendation Breakdown", fontsize=14, fontweight="bold")
 
-    # Stacked bar per store
     ax = axes[0]
     bottom = np.zeros(len(pivot))
     for dec, color in [("Increase", INCREASE_COLOR), ("Hold", HOLD_COLOR), ("Decrease", DECREASE_COLOR)]:
@@ -529,7 +497,6 @@ def plot_decision_breakdown():
     ax.grid(axis="y", linestyle="--", alpha=0.5, zorder=0)
     ax.set_xticklabels(pivot.index, rotation=30, ha="right")
 
-    # Overall donut
     ax2 = axes[1]
     totals = pivot.sum()
     colors = [INCREASE_COLOR, HOLD_COLOR, DECREASE_COLOR]
@@ -544,7 +511,6 @@ def plot_decision_breakdown():
         at.set_color("white")
         at.set_fontweight("bold")
 
-    # Draw hole for donut effect
     centre_circle = plt.Circle((0, 0), 0.60, fc="white")
     ax2.add_patch(centre_circle)
     ax2.set_title("Overall decision split")
